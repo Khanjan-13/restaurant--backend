@@ -242,21 +242,21 @@ const deleteKot = async (req, res) => {
   try {
     const { id: userId, adminId } = req.user;
     const creatorId = adminId || userId;
-    const { tableNumber } = req.body;
+    const { tokenNumber } = req.body;
 
     if (
-      !tableNumber ||
-      (typeof tableNumber !== "string" && typeof tableNumber !== "number")
+      !tokenNumber ||
+      (typeof tokenNumber !== "string" && typeof tokenNumber !== "number")
     ) {
       return res.status(400).json({
-        message: "'tableNumber' is required and must be a string or number.",
+        message: "'tokenNumber' is required and must be a string or number.",
       });
     }
 
-    // Update isKot to false for all matching items
+    // Update isKot to false for all items in the token group
     const result = await Kot.updateMany(
       {
-        tableNumber,
+        tokenNumber,
         createdBy: creatorId,
         isKot: true,
       },
@@ -265,12 +265,12 @@ const deleteKot = async (req, res) => {
 
     if (result.modifiedCount === 0) {
       return res.status(404).json({
-        message: `No active KOT items found for table number ${tableNumber}.`,
+        message: `No active KOT items found for token number ${tokenNumber}.`,
       });
     }
 
     return res.status(200).json({
-      message: `KOT items for table number ${tableNumber} marked as isKot: false.`,
+      message: `KOT items for token number ${tokenNumber} marked as isKot: false.`,
       updatedCount: result.modifiedCount,
     });
   } catch (error) {
@@ -281,6 +281,7 @@ const deleteKot = async (req, res) => {
     });
   }
 };
+
 
 
 // const deleteKot = async (req, res) => {
