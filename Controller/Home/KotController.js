@@ -253,93 +253,138 @@ const deleteKot = async (req, res) => {
       });
     }
 
-    // Step 1: Get all items for this table and creator
-    const itemsToDelete = await Kot.find({ tableNumber, createdBy: creatorId });
-
-    if (!itemsToDelete || itemsToDelete.length === 0) {
-      return res.status(404).json({
-        message: `No KOT items found for table number ${tableNumber}.`,
-      });
-    }
-
-    // Step 2: Calculate total amount to subtract
-    const deletedGroupTotal = itemsToDelete.reduce((total, item) => {
-      return total + (item.totalAmount ?? item.itemPrice * item.itemQuantity);
-    }, 0);
-
-    // Step 3: Get all token groups remaining on this table (excluding those being deleted)
-    const tokenTotals = await Kot.aggregate([
+    // Update isKot to false for all matching items
+    const result = await Kot.updateMany(
       {
-        $match: {
-          createdBy: new mongoose.Types.ObjectId(creatorId),
-          tableNumber,
-          _id: { $nin: itemsToDelete.map((i) => i._id) },
-        },
-      },
-      {
-        $group: {
-          _id: "$tokenNumber",
-          groupTotalAmount: {
-            $sum: {
-              $ifNull: [
-                "$totalAmount",
-                { $multiply: ["$itemPrice", "$itemQuantity"] },
-              ],
-            },
-          },
-        },
-      },
-      { $sort: { groupTotalAmount: -1 } },
-    ]);
-
-    const highestKot = tokenTotals[0];
-
-    // Step 4: Adjust the highest token group if found
-    if (highestKot) {
-      const itemsToUpdate = await Kot.find({
-        tokenNumber: highestKot._id,
-        createdBy: creatorId,
         tableNumber,
+        createdBy: creatorId,
+        isKot: true,
+      },
+      { $set: { isKot: false } }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({
+        message: `No active KOT items found for table number ${tableNumber}.`,
       });
-
-      let remainingToSubtract = deletedGroupTotal;
-
-      for (const item of itemsToUpdate) {
-        const itemValue =
-          item.totalAmount ?? item.itemPrice * item.itemQuantity;
-
-        if (remainingToSubtract <= 0) break;
-
-        if (itemValue >= remainingToSubtract) {
-          item.totalAmount = itemValue - remainingToSubtract;
-          remainingToSubtract = 0;
-        } else {
-          item.totalAmount = 0;
-          remainingToSubtract -= itemValue;
-        }
-
-        await item.save();
-      }
     }
 
-    // Step 5: Delete all KOTs for this table
-    const result = await Kot.deleteMany({ tableNumber, createdBy: creatorId });
-
-    // Step 6: Return response
     return res.status(200).json({
-      message: `All KOTs for table number ${tableNumber} deleted successfully.`,
-      deletedCount: result.deletedCount,
-      totalPriceSubtracted: deletedGroupTotal,
-      highestKotTokenNumber: highestKot?._id || null,
+      message: `KOT items for table number ${tableNumber} marked as isKot: false.`,
+      updatedCount: result.modifiedCount,
     });
   } catch (error) {
-    console.error("Error deleting KOT items by table number:", error);
+    console.error("Error updating KOT items:", error);
     return res.status(500).json({
-      message: "An error occurred while deleting the KOT items.",
+      message: "An error occurred while updating the KOT items.",
       error: error.message,
     });
   }
 };
+
+
+// const deleteKot = async (req, res) => {
+//   try {
+//     const { id: userId, adminId } = req.user;
+//     const creatorId = adminId || userId;
+//     const { tableNumber } = req.body;
+
+//     if (
+//       !tableNumber ||
+//       (typeof tableNumber !== "string" && typeof tableNumber !== "number")
+//     ) {
+//       return res.status(400).json({
+//         message: "'tableNumber' is required and must be a string or number.",
+//       });
+//     }
+
+//     // Step 1: Get all items for this table and creator
+//     const itemsToDelete = await Kot.find({ tableNumber, createdBy: creatorId });
+
+//     if (!itemsToDelete || itemsToDelete.length === 0) {
+//       return res.status(404).json({
+//         message: `No KOT items found for table number ${tableNumber}.`,
+//       });
+//     }
+
+//     // Step 2: Calculate total amount to subtract
+//     const deletedGroupTotal = itemsToDelete.reduce((total, item) => {
+//       return total + (item.totalAmount ?? item.itemPrice * item.itemQuantity);
+//     }, 0);
+
+//     // Step 3: Get all token groups remaining on this table (excluding those being deleted)
+//     const tokenTotals = await Kot.aggregate([
+//       {
+//         $match: {
+//           createdBy: new mongoose.Types.ObjectId(creatorId),
+//           tableNumber,
+//           _id: { $nin: itemsToDelete.map((i) => i._id) },
+//         },
+//       },
+//       {
+//         $group: {
+//           _id: "$tokenNumber",
+//           groupTotalAmount: {
+//             $sum: {
+//               $ifNull: [
+//                 "$totalAmount",
+//                 { $multiply: ["$itemPrice", "$itemQuantity"] },
+//               ],
+//             },
+//           },
+//         },
+//       },
+//       { $sort: { groupTotalAmount: -1 } },
+//     ]);
+
+//     const highestKot = tokenTotals[0];
+
+//     // Step 4: Adjust the highest token group if found
+//     if (highestKot) {
+//       const itemsToUpdate = await Kot.find({
+//         tokenNumber: highestKot._id,
+//         createdBy: creatorId,
+//         tableNumber,
+//       });
+
+//       let remainingToSubtract = deletedGroupTotal;
+
+//       for (const item of itemsToUpdate) {
+//         const itemValue =
+//           item.totalAmount ?? item.itemPrice * item.itemQuantity;
+
+//         if (remainingToSubtract <= 0) break;
+
+//         if (itemValue >= remainingToSubtract) {
+//           item.totalAmount = itemValue - remainingToSubtract;
+//           remainingToSubtract = 0;
+//         } else {
+//           item.totalAmount = 0;
+//           remainingToSubtract -= itemValue;
+//         }
+
+//         await item.save();
+//       }
+//     }
+
+//     // Step 5: Delete all KOTs for this table
+//     const result = await Kot.deleteMany({ tableNumber, createdBy: creatorId });
+
+//     // Step 6: Return response
+//     return res.status(200).json({
+//       message: `All KOTs for table number ${tableNumber} deleted successfully.`,
+//       deletedCount: result.deletedCount,
+//       totalPriceSubtracted: deletedGroupTotal,
+//       highestKotTokenNumber: highestKot?._id || null,
+//     });
+//   } catch (error) {
+//     console.error("Error deleting KOT items by table number:", error);
+//     return res.status(500).json({
+//       message: "An error occurred while deleting the KOT items.",
+//       error: error.message,
+//     });
+//   }
+// };
 
 const deleteSingleKot = async (req, res) => {
   try {

@@ -42,10 +42,13 @@ const kotSchema = new mongoose.Schema({
     type: Boolean,
     required: true,
   },
+  isKot: {
+    type: Boolean,
+    default: true,
+  },
 },
 {
   timestamps: true, // Automatically manage createdAt and updatedAt
-}
-);
+});
 
 module.exports = mongoose.model("Kot", kotSchema, "Kot");
