@@ -1,5 +1,5 @@
 const Orders = require("../../Model/Dashboard/ordersModel");
-
+const Kot = require("../../Model/Home/Kot.js");
 const create = async (req, res) => {
   try {
     const { tokenNumber, items, totalAmount, paymentMethod, tableNumber } =
@@ -139,4 +139,69 @@ const getOrderById = async (req, res) => {
   }
 };
 
-module.exports = { create, getAllOrders, getOrderById };
+const saveOrderAndDeleteKot = async (req, res) => {
+  try {
+    const tableNumber = req.params.tableNumber; // passed from URL
+    const { tokenNumber, paymentMethod } = req.body; // passed from frontend body
+
+    console.log("Table:", tableNumber, "Token:", tokenNumber, "Payment:", paymentMethod);
+
+    const { id: userId, adminId } = req.user;
+    const creatorId = adminId || userId;
+
+    // Step 1: Fetch all KOT items for that table
+    const kotItems = await Kot.find({ tableNumber, createdBy: creatorId });
+
+    if (!kotItems || kotItems.length === 0) {
+      return res.status(404).json({
+        message: `No KOT items found for table ${tableNumber}`,
+      });
+    }
+
+    // Step 2: Prepare order data from KOT items
+    const orderItems = kotItems.map((item) => ({
+      itemName: item.itemName,
+      itemPrice: item.itemPrice,
+      itemQuantity: item.itemQuantity,
+      itemCategory: item.itemCategory || "",
+      itemDescription: item.itemDescription || "",
+    }));
+
+    // Calculate total amount
+    const totalAmount = orderItems.reduce(
+      (sum, item) => sum + item.itemPrice * item.itemQuantity,
+      0
+    );
+
+    // Step 3: Save new order with tokenNumber & paymentMethod
+    const newOrder = new Orders({
+      tokenNumber,     // from frontend body
+      paymentMethod,   // from frontend body
+      tableNumber,
+      items: orderItems,
+      totalAmount,
+      createdBy: creatorId,
+      orderStatus: true,
+    });
+
+    await newOrder.save();
+
+    // Step 4: Delete all KOT items for that table
+    await Kot.deleteMany({ tableNumber, createdBy: creatorId });
+
+    // Step 5: Respond success
+    return res.status(200).json({
+      message: `Order saved and KOT items deleted for table ${tableNumber}`,
+      order: newOrder,
+    });
+  } catch (error) {
+    console.error("Error saving order and deleting KOT:", error);
+    return res.status(500).json({
+      message: "An error occurred while saving the order and deleting KOT",
+      error: error.message,
+    });
+  }
+};
+
+
+module.exports = { create, getAllOrders, getOrderById, saveOrderAndDeleteKot };
