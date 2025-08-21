@@ -12,6 +12,7 @@ const tableSection = require("./Routes/Dashboard/tableSectionRoute.js");
 const addTable = require("./Routes/Home/addTableRoutes.js");
 const ordersRoute = require("./Routes/Dashboard/orderRoute.js");
 const staff = require("./Routes/Dashboard/staff/staffRoute.js");
+const orderStats = require("./Routes/Dashboard/dashBoardRoute.js");
 const app = express();
 app.use(bodyParser.json());
 app.use(cors());
@@ -30,6 +31,6 @@ mongoose
   })
   .catch((error) => console.log("DB connection Error: ", error));
 
-app.use("/dashboard", categoryRoutes, itemRoutes, tableSection, ordersRoute);
+app.use("/dashboard", categoryRoutes, itemRoutes, tableSection, ordersRoute, orderStats);
 app.use("/dashboard/staff", staff);
 app.use("/", signupRoutes, kotRoutes, addTable, orderStatusRoutes);
