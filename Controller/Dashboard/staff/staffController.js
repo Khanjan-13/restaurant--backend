@@ -2,15 +2,15 @@ const Staff = require("../../../Model/Dashboard/staff/staffModel.js");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = "your_jwt_secret_key"; // Ideally from process.env
+const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key"; // better from env
 
 // Register Staff
 const registerStaff = async (req, res) => {
   try {
-    const { name, mobile, email, password } = req.body;
+    const { name, mobile, email, password, role } = req.body; // include role
     const userId = req.user?.id; // assuming JWT auth middleware adds req.user
 
-    // Check for duplicate email (optional but recommended)
+    // Check for duplicate email
     const existingStaff = await Staff.findOne({ email });
     if (existingStaff) {
       return res.status(400).json({ message: "Email already exists" });
@@ -25,6 +25,7 @@ const registerStaff = async (req, res) => {
       mobile,
       email,
       password: hashedPassword,
+      role, // add role here
       createdBy: userId,
     });
 
@@ -48,15 +49,15 @@ const loginStaff = async (req, res) => {
     const isMatch = await bcrypt.compare(password, staff.password);
     if (!isMatch) return res.status(401).json({ message: "Invalid password" });
 
-const token = jwt.sign(
-  {
-    id: staff._id, // waiter's _id
-    adminId: staff.createdBy?._id || null, // if createdBy exists
-  },
-  process.env.JWT_SECRET,
-  { expiresIn: "7d" }
-);
-
+    const token = jwt.sign(
+      {
+        id: staff._id,
+        role: staff.role, // include role in token
+        adminId: staff.createdBy?._id || null,
+      },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     res.json({ message: "Login successful", token, staff });
   } catch (err) {
@@ -68,7 +69,6 @@ const token = jwt.sign(
 const getAllStaff = async (req, res) => {
   try {
     const staffList = await Staff.find().populate("createdBy", "name email");
-    // This will include the name and email of the user who created each staff
 
     res.status(200).json({ data: staffList });
   } catch (err) {
@@ -91,10 +91,10 @@ const getStaffById = async (req, res) => {
 // Update Staff
 const updateStaff = async (req, res) => {
   try {
-    const { name, mobile, email } = req.body;
+    const { name, mobile, email, role } = req.body; // include role
     const staff = await Staff.findByIdAndUpdate(
       req.params.id,
-      { name, mobile, email },
+      { name, mobile, email, role },
       { new: true }
     );
 
