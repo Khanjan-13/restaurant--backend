@@ -2,13 +2,21 @@ const Orders = require("../../Model/Dashboard/ordersModel");
 
 const getOrderStats = async (req, res) => {
   try {
-    // get date of 1 month ago
+    // ✅ Ensure the user is authenticated
+    const userId = req.user?.id;
+    console.log("User ID:", userId);
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    // ✅ Get date of 1 month ago
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
 
     const stats = await Orders.aggregate([
       {
         $match: {
+          userId: userId, // filter by user’s orders only
           createdAt: { $gte: lastMonth } // filter orders created in last month
         }
       },
