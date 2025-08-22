@@ -9,11 +9,11 @@ const getOrderStats = async (req, res) => {
       return res.status(401).json({ message: "Authentication required" });
     }
 
-    // ✅ Aggregate all orders of this user
+    // ✅ Aggregate stats for orders created by this user
     const stats = await Orders.aggregate([
       {
         $match: {
-          userId: userId // only orders created by logged-in user
+          createdBy: userId  // 👈 check if order was created by this user
         }
       },
       {
@@ -47,6 +47,7 @@ const getOrderStats = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
+
 
 
 module.exports = { getOrderStats };
