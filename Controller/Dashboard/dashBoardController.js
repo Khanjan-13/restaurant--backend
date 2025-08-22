@@ -9,15 +9,11 @@ const getOrderStats = async (req, res) => {
       return res.status(401).json({ message: "Authentication required" });
     }
 
-    // ✅ Get date of 1 month ago
-    const lastMonth = new Date();
-    lastMonth.setMonth(lastMonth.getMonth() - 1);
-
+    // ✅ Aggregate all orders of this user
     const stats = await Orders.aggregate([
       {
         $match: {
-          userId: userId, // filter by user’s orders only
-          createdAt: { $gte: lastMonth } // filter orders created in last month
+          userId: userId // only orders created by logged-in user
         }
       },
       {
@@ -30,6 +26,7 @@ const getOrderStats = async (req, res) => {
       }
     ]);
 
+    // ✅ If no orders found, return defaults
     if (!stats.length) {
       return res.status(200).json({
         totalRevenue: 0,
@@ -50,5 +47,6 @@ const getOrderStats = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
+
 
 module.exports = { getOrderStats };
