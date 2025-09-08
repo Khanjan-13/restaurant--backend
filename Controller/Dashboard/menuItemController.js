@@ -18,6 +18,7 @@ const create = async (req, res) => {
       const itemExist = await menuItem.findOne({
         categoryId,
         name: item.name,
+        quantity: item.quantity,
         price: item.price,
         createdBy: userId,
       });
@@ -33,6 +34,7 @@ const create = async (req, res) => {
       categoryId,
       createdBy: userId,
       name: item.name,
+      quantity: item.quantity,
       price: item.price,
     }));
 
@@ -116,6 +118,10 @@ const update = async (req, res) => {
     }
 
     // Update the item
+    // Ensure quantity is a number if present
+    if (req.body.quantity !== undefined) {
+      req.body.quantity = Number(req.body.quantity);
+    }
     const updatedData = await menuItem.findByIdAndUpdate(id, req.body, {
       new: true,
     });
@@ -173,6 +179,39 @@ const updateSwitch = async (req, res) => {
   }
 };
 
+// Atomically decrement quantity by a positive amount, preventing negatives
+const decrementQuantity = async (req, res) => {
+  try {
+    const { id: userId, adminId } = req.user || {};
+    if (!userId && !adminId) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+
+    const { id } = req.params;
+    const amount = Number(req.body?.amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ message: "amount must be a positive number." });
+    }
+
+    const creatorId = adminId || userId;
+
+    const updated = await menuItem.findOneAndUpdate(
+      { _id: id, createdBy: creatorId, quantity: { $gte: amount } },
+      { $inc: { quantity: -amount } },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(400).json({ message: "Insufficient stock or item not found." });
+    }
+
+    return res.status(200).json({ message: "Stock decremented.", updatedItem: updated });
+  } catch (error) {
+    console.error("Error decrementing quantity:", error);
+    return res.status(500).json({ errorMessage: "Internal server error." });
+  }
+};
+
 const deleteItem = async (req, res) => {
   try {
     // Ensure the user is authenticated
@@ -201,11 +240,41 @@ const deleteItem = async (req, res) => {
   }
 };
 
+// Return total quantity across all items and the total number of items
+const getTotalQuantity = async (req, res) => {
+  try {
+    const { id: userId, adminId } = req.user || {};
+    if (!userId && !adminId) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+    const creatorId = adminId || userId;
+
+    const items = await menuItem
+      .find({ createdBy: creatorId })
+      .select("quantity");
+
+    const totalQuantity = items.reduce(
+      (acc, it) => acc + Number(it.quantity || 0),
+      0
+    );
+
+    return res.status(200).json({
+      totalQuantity,
+      itemCount: items.length,
+    });
+  } catch (error) {
+    console.error("Error calculating total quantity:", error);
+    return res.status(500).json({ errorMessage: "Internal server error." });
+  }
+};
+
 module.exports = {
   create,
   getAllItems,
   getItemById,
   update,
   updateSwitch,
+  decrementQuantity,
   deleteItem,
+  getTotalQuantity,
 };

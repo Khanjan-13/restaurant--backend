@@ -13,6 +13,7 @@ const menuItemSchema = new mongoose.Schema({
     required: true,
   },
   name: { type: String, required: true },
+  quantity: { type: Number, required: true }, 
   price: { type: Number, required: true },
   available: { type: Boolean, required: true, default: true },
 });

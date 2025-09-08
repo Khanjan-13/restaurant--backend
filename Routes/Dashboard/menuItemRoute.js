@@ -6,6 +6,8 @@ const {
   update,
   deleteItem,
   updateSwitch,
+  decrementQuantity,
+  getTotalQuantity,
 } = require("../../Controller/Dashboard/menuItemController.js");
 const authenticateUser = require("../../authMiddleware.js");
 const router = express.Router();
@@ -15,6 +17,8 @@ router.get("/menu/itemall",authenticateUser, getAllItems);
 router.get("/menu/item/:id", authenticateUser, getItemById);
 router.put("/menu/itemupdate/:id", authenticateUser, update);
 router.put("/menu/itemSwitchUpdate/:id", authenticateUser, updateSwitch);
+router.put("/menu/itemdecrement/:id", authenticateUser, decrementQuantity);
+router.get("/menu/total-quantity", authenticateUser, getTotalQuantity);
 router.delete("/menu/itemdelete/:id", authenticateUser, deleteItem);
 
 module.exports = router;
