@@ -42,6 +42,5 @@ const getOrderStats = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
- 
 
 module.exports = { getOrderStats };
