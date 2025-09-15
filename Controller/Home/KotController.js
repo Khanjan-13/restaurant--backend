@@ -1,10 +1,11 @@
 const Kot = require("../../Model/Home/Kot.js");
 const mongoose = require("mongoose");
-const MenuItem = require("../../Model/Dashboard/menuItemModel.js"); // inventory
+const Inventory = require("../../Model/Dashboard/menuItemModel.js"); // inventory
 
 const create = async (req, res) => {
   try {
     const { tokenNumber, items, totalAmount } = req.body;
+
     const { id: userId, adminId } = req.user;
     const creatorId = adminId || userId;
 
@@ -19,59 +20,70 @@ const create = async (req, res) => {
       return res.status(400).json({ message: "Invalid total amount" });
     }
 
-    const newItems = [];
+    const session = await Kot.startSession();
+    session.startTransaction();
 
-    for (const item of items) {
-      if (
-        !item.itemId ||
-        !item.itemName ||
-        !item.itemPrice ||
-        !item.itemQuantity ||
-        typeof item.itemPrice !== "number" ||
-        typeof item.itemQuantity !== "number"
-      ) {
-        throw new Error("Each item must have valid itemId, itemName, itemPrice, and itemQuantity");
+    try {
+      const newItems = [];
+
+      for (const item of items) {
+        if (
+          !item.itemName ||
+          !item.itemPrice ||
+          !item.itemQuantity ||
+          typeof item.itemPrice !== "number" ||
+          typeof item.itemQuantity !== "number"
+        ) {
+          throw new Error("Each item must have valid itemName, itemPrice, and itemQuantity");
+        }
+
+        // ✅ Check inventory
+        const inventoryItem = await Inventory.findOne({ name: item.itemName }).session(session);
+
+        if (!inventoryItem) {
+          throw new Error(`Item '${item.itemName}' not found in inventory`);
+        }
+
+        if (inventoryItem.availableQty < item.itemQuantity) {
+          throw new Error(`Not enough stock for ${item.itemName}. Available: ${inventoryItem.availableQty}`);
+        }
+
+        // ✅ Deduct stock
+        inventoryItem.availableQty -= item.itemQuantity;
+        await inventoryItem.save({ session });
+
+        newItems.push({
+          createdBy: creatorId,
+          tokenNumber,
+          itemName: item.itemName,
+          itemPrice: item.itemPrice,
+          itemQuantity: item.itemQuantity,
+          itemDescription: item.itemDescription || "",
+          itemCategory: item.itemCategory || null,
+          tableNumber: item.tableNumber || null,
+          totalAmount,
+          orderStatus: item.orderStatus || "pending",
+        });
       }
 
-      // 🔎 Find Menu Item in DB
-      const menuItem = await MenuItem.findById(item.itemId);
-      if (!menuItem) {
-        throw new Error(`Menu Item not found: ${item.itemName}`);
-      }
+      // Insert into KOT collection
+      const result = await Kot.insertMany(newItems, { session });
 
-      // ✅ Check stock
-      if (menuItem.qty < item.itemQuantity) {
-        throw new Error(`Not enough stock for ${item.itemName}. Available: ${menuItem.qty}`);
-      }
+      await session.commitTransaction();
+      session.endSession();
 
-      // ➖ Subtract stock
-      menuItem.qty -= item.itemQuantity;
-      await menuItem.save();
-
-      // Push prepared item for KOT entry
-      newItems.push({
-        createdBy: creatorId,
-        tokenNumber,
-        itemName: item.itemName,
-        itemPrice: item.itemPrice,
-        itemQuantity: item.itemQuantity,
-        itemDescription: item.itemDescription || "",
-        itemCategory: item.itemCategory || null,
-        tableNumber: item.tableNumber || null,
-        totalAmount,
-        orderStatus: item.orderStatus || "pending",
-      });
+      res.status(201).json({ message: "Items created successfully", result });
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
     }
-
-    // Save the KOT
-    const result = await Kot.insertMany(newItems);
-
-    res.status(201).json({ message: "Items created successfully", result });
   } catch (error) {
     console.error("Error creating items:", error);
     res.status(500).json({ errorMessage: error.message });
   }
 };
+
 
 
 // const create = async (req, res) => {
