@@ -1,4 +1,5 @@
 const menuItem = require("../../Model/Dashboard/menuItemModel.js");
+
 const create = async (req, res) => {
   try {
     // Ensure the user is authenticated
@@ -6,6 +7,7 @@ const create = async (req, res) => {
     if (!userId) {
       return res.status(401).json({ message: "Authentication required" });
     }
+
     const { categoryId, items } = req.body;
 
     // Validate the request body
@@ -34,6 +36,7 @@ const create = async (req, res) => {
       createdBy: userId,
       name: item.name,
       price: item.price,
+      qty: item.qty ?? 0, // ✅ default to 0 if not provided
     }));
 
     const result = await menuItem.insertMany(newItems);
@@ -48,8 +51,6 @@ const create = async (req, res) => {
 const getAllItems = async (req, res) => {
   try {
     const { id: userId, adminId } = req.user;
-    console.log("req.user:", req.user);
-
     const creatorId = adminId || userId; // If waiter, use adminId. If admin, use their own ID.
 
     const itemData = await menuItem
@@ -69,7 +70,6 @@ const getAllItems = async (req, res) => {
 
 const getItemById = async (req, res) => {
   try {
-    // Ensure the user is authenticated
     const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "Authentication required." });
@@ -77,10 +77,9 @@ const getItemById = async (req, res) => {
 
     const id = req.params.id;
 
-    // Check if the item exists and belongs to the authenticated user
     const item = await menuItem
-      .findOne({ _id: id, createdBy: userId }) // Correct query
-      .populate("categoryId"); // Populate category details
+      .findOne({ _id: id, createdBy: userId })
+      .populate("categoryId");
 
     if (!item) {
       return res
@@ -91,13 +90,12 @@ const getItemById = async (req, res) => {
     res.status(200).json(item);
   } catch (error) {
     console.error("Error fetching item by ID:", error);
-    res.status(500).json({ errorMessage: error.message }); // Fixed typo in error key
+    res.status(500).json({ errorMessage: error.message });
   }
 };
 
 const update = async (req, res) => {
   try {
-    // Ensure the user is authenticated
     const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "Authentication required." });
@@ -105,20 +103,27 @@ const update = async (req, res) => {
 
     const id = req.params.id;
 
-    // Check if the item exists and belongs to the authenticated user
-    const item = await menuItem
-      .findOne({ _id: id, createdBy: userId })
-      .populate("categoryId");
+    const item = await menuItem.findOne({ _id: id, createdBy: userId });
     if (!item) {
       return res
         .status(404)
         .json({ message: "Item not found or access denied." });
     }
 
-    // Update the item
-    const updatedData = await menuItem.findByIdAndUpdate(id, req.body, {
-      new: true,
-    });
+    // ✅ Only allow updating allowed fields
+    const { name, price, qty, categoryId, available } = req.body;
+
+    const updatedData = await menuItem.findByIdAndUpdate(
+      id,
+      {
+        ...(name && { name }),
+        ...(price !== undefined && { price }),
+        ...(qty !== undefined && { qty }), // ✅ qty update support
+        ...(categoryId && { categoryId }),
+        ...(available !== undefined && { available }),
+      },
+      { new: true }
+    );
 
     res.status(200).json({
       message: "Item updated successfully!",
@@ -132,23 +137,20 @@ const update = async (req, res) => {
 
 const updateSwitch = async (req, res) => {
   try {
-    // Ensure the user is authenticated
-    const userId = req.user?.id; // Assuming middleware adds `req.user`
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "Authentication required." });
     }
 
-    const { id } = req.params; // Get item ID from the route parameter
-    const { available } = req.body; // Get the `available` status from the request body
+    const { id } = req.params;
+    const { available } = req.body;
 
-    // Validate the `available` field
     if (typeof available !== "boolean") {
       return res.status(400).json({
         message: "Invalid input: 'available' must be a boolean value.",
       });
     }
 
-    // Check if the item exists and belongs to the authenticated user
     const item = await menuItem.findOne({ _id: id, createdBy: userId });
     if (!item) {
       return res
@@ -156,11 +158,9 @@ const updateSwitch = async (req, res) => {
         .json({ message: "Item not found or you do not have access." });
     }
 
-    // Update the item's `available` status
     item.available = available;
     await item.save();
 
-    // Respond with success
     return res.status(200).json({
       message: `Item availability successfully updated to ${available}.`,
       updatedItem: item,
@@ -175,7 +175,6 @@ const updateSwitch = async (req, res) => {
 
 const deleteItem = async (req, res) => {
   try {
-    // Ensure the user is authenticated
     const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "Authentication required." });
@@ -183,7 +182,6 @@ const deleteItem = async (req, res) => {
 
     const id = req.params.id;
 
-    // Check if the item exists and belongs to the authenticated user
     const item = await menuItem.findOne({ _id: id, createdBy: userId });
     if (!item) {
       return res
@@ -191,13 +189,12 @@ const deleteItem = async (req, res) => {
         .json({ message: "Item not found or access denied!" });
     }
 
-    // Delete the item
     await menuItem.findByIdAndDelete(id);
 
     res.status(200).json({ message: "Item deleted successfully!" });
   } catch (error) {
     console.error("Error deleting item:", error);
-    res.status(500).json({ errorMessage: error.message }); // Fixed typo in "errorMessage"
+    res.status(500).json({ errorMessage: error.message });
   }
 };
 
