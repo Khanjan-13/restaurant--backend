@@ -5,7 +5,7 @@ const createCustomer = async (req, res) => {
   try {
     const customer = new Customer({
       ...req.body,
-      createdBy: req.user._id, // assuming auth middleware
+      createdBy: req.user?.id, // assuming auth middleware
     });
     await customer.save();
     res.status(201).json({ success: true, data: customer });
