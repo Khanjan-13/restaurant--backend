@@ -474,6 +474,103 @@ const deleteKot = async (req, res) => {
 //   }
 // };
 
+// const deleteSingleKot = async (req, res) => {
+//   try {
+//     const { id: userId, adminId } = req.user;
+//     const creatorId = adminId || userId;
+//     const { itemId } = req.body;
+
+//     if (!itemId || !mongoose.Types.ObjectId.isValid(itemId)) {
+//       return res.status(400).json({
+//         message: "'itemId' is required and must be a valid ObjectId.",
+//       });
+//     }
+
+//     // Step 1: Find the item
+//     const item = await Kot.findOne({ _id: itemId, createdBy: creatorId });
+
+//     if (!item) {
+//       return res.status(404).json({
+//         message: `No KOT item found with id ${itemId}.`,
+//       });
+//     }
+
+//     // Step 2: Get item details
+//     const itemTotalAmount = item.itemPrice * item.itemQuantity;
+//     const tableNumber = item.tableNumber;
+
+//     // Step 3: Find other items on the same table (excluding this one)
+//     const otherItems = await Kot.find({
+//       tableNumber,
+//       createdBy: creatorId,
+//       _id: { $ne: itemId },
+//     }).sort({
+//       totalAmount: -1,
+//       updatedAt: -1,
+//     });
+
+//     let remainingToSubtract = itemTotalAmount;
+//     let adjustedItems = [];
+
+//     for (const otherItem of otherItems) {
+//       if (remainingToSubtract <= 0) break;
+
+//       const otherItemValue =
+//         otherItem.totalAmount ?? otherItem.itemPrice * otherItem.itemQuantity;
+
+//       if (otherItemValue >= remainingToSubtract) {
+//         otherItem.totalAmount = otherItemValue - remainingToSubtract;
+//         await otherItem.save();
+
+//         adjustedItems.push({
+//           itemId: otherItem._id,
+//           subtracted: remainingToSubtract,
+//           newTotalAmount: otherItem.totalAmount,
+//         });
+
+//         remainingToSubtract = 0;
+//       } else {
+//         otherItem.totalAmount = 0;
+//         await otherItem.save();
+
+//         adjustedItems.push({
+//           itemId: otherItem._id,
+//           subtracted: otherItemValue,
+//           newTotalAmount: 0,
+//         });
+
+//         remainingToSubtract -= otherItemValue;
+//       }
+//     }
+
+//     if (remainingToSubtract > 0) {
+//       console.warn(
+//         `Could not fully subtract item total (${itemTotalAmount}). Remaining: ${remainingToSubtract}`
+//       );
+//     }
+
+//     // Step 4: Delete the item
+//     await Kot.deleteOne({ _id: itemId, createdBy: creatorId });
+
+//     // Step 5: Send response
+//     return res.status(200).json({
+//       message: `KOT item with id ${itemId} deleted successfully.`,
+//       totalPriceSubtracted: itemTotalAmount - remainingToSubtract,
+//       remainingNotSubtracted: remainingToSubtract > 0 ? remainingToSubtract : 0,
+//       adjustedKotItems: adjustedItems,
+//     });
+//   } catch (error) {
+//     console.error("Error deleting single KOT item:", error);
+//     return res.status(500).json({
+//       message: "An error occurred while deleting the KOT item.",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
+
+
 const deleteSingleKot = async (req, res) => {
   try {
     const { id: userId, adminId } = req.user;
@@ -486,7 +583,7 @@ const deleteSingleKot = async (req, res) => {
       });
     }
 
-    // Step 1: Find the item
+    // Step 1: Find the KOT item
     const item = await Kot.findOne({ _id: itemId, createdBy: creatorId });
 
     if (!item) {
@@ -495,11 +592,19 @@ const deleteSingleKot = async (req, res) => {
       });
     }
 
-    // Step 2: Get item details
+    // Step 2: Restore stock in MenuItem
+    const menuItem = await MenuItem.findOne({ name: item.itemName });
+    if (menuItem) {
+      menuItem.qty += item.itemQuantity;
+      menuItem.available = true; // mark available if stock comes back
+      await menuItem.save();
+    }
+
+    // Step 3: Get item details
     const itemTotalAmount = item.itemPrice * item.itemQuantity;
     const tableNumber = item.tableNumber;
 
-    // Step 3: Find other items on the same table (excluding this one)
+    // Step 4: Find other items on the same table (excluding this one)
     const otherItems = await Kot.find({
       tableNumber,
       createdBy: creatorId,
@@ -549,12 +654,14 @@ const deleteSingleKot = async (req, res) => {
       );
     }
 
-    // Step 4: Delete the item
+    // Step 5: Delete the item
     await Kot.deleteOne({ _id: itemId, createdBy: creatorId });
 
-    // Step 5: Send response
+    // Step 6: Send response
     return res.status(200).json({
       message: `KOT item with id ${itemId} deleted successfully.`,
+      qtyRestored: item.itemQuantity,
+      stockItem: menuItem ? menuItem.name : null,
       totalPriceSubtracted: itemTotalAmount - remainingToSubtract,
       remainingNotSubtracted: remainingToSubtract > 0 ? remainingToSubtract : 0,
       adjustedKotItems: adjustedItems,
