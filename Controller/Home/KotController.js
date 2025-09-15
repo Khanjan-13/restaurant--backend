@@ -1,7 +1,6 @@
 const Kot = require("../../Model/Home/Kot.js");
 const mongoose = require("mongoose");
-const Inventory = require("../../Model/Dashboard/menuItemModel.js"); // inventory
-
+const MenuItem = require("../../Model/Dashboard/menuItemModel.js"); // inventory
 const create = async (req, res) => {
   try {
     const { tokenNumber, items, totalAmount } = req.body;
@@ -37,21 +36,27 @@ const create = async (req, res) => {
           throw new Error("Each item must have valid itemName, itemPrice, and itemQuantity");
         }
 
-        // ✅ Check inventory
-        const inventoryItem = await Inventory.findOne({ name: item.itemName }).session(session);
+        // ✅ Find item in stock
+        const menuItem = await MenuItem.findOne({ name: item.itemName }).session(session);
 
-        if (!inventoryItem) {
-          throw new Error(`Item '${item.itemName}' not found in inventory`);
+        if (!menuItem) {
+          throw new Error(`Menu item '${item.itemName}' not found`);
         }
 
-        if (inventoryItem.availableQty < item.itemQuantity) {
-          throw new Error(`Not enough stock for ${item.itemName}. Available: ${inventoryItem.availableQty}`);
+        if (menuItem.qty < item.itemQuantity) {
+          throw new Error(
+            `Not enough stock for ${item.itemName}. Available: ${menuItem.qty}`
+          );
         }
 
-        // ✅ Deduct stock
-        inventoryItem.availableQty -= item.itemQuantity;
-        await inventoryItem.save({ session });
+        // ✅ Subtract quantity from stock
+        menuItem.qty -= item.itemQuantity;
+        if (menuItem.qty <= 0) {
+          menuItem.available = false; // mark unavailable if out of stock
+        }
+        await menuItem.save({ session });
 
+        // Prepare KOT entry
         newItems.push({
           createdBy: creatorId,
           tokenNumber,
@@ -66,26 +71,23 @@ const create = async (req, res) => {
         });
       }
 
-      // Insert into KOT collection
+      // ✅ Save KOT items
       const result = await Kot.insertMany(newItems, { session });
 
       await session.commitTransaction();
       session.endSession();
 
-      res.status(201).json({ message: "Items created successfully", result });
+      res.status(201).json({ message: "KOT created successfully", result });
     } catch (err) {
       await session.abortTransaction();
       session.endSession();
       throw err;
     }
   } catch (error) {
-    console.error("Error creating items:", error);
+    console.error("Error creating KOT:", error);
     res.status(500).json({ errorMessage: error.message });
   }
 };
-
-
-
 // const create = async (req, res) => {
 //   try {
 //     const { tokenNumber, items, totalAmount } = req.body;
