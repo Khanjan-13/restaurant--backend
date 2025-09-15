@@ -1,63 +1,69 @@
 const Kot = require("../../Model/Home/Kot.js");
 const mongoose = require("mongoose");
+const MenuItem = require("../../Model/Dashboard/menuItemModel.js"); // inventory
 
 const create = async (req, res) => {
   try {
     const { tokenNumber, items, totalAmount } = req.body;
-
-    // Ensure the user is authenticated
-    // const userId = req.user?.id;
-    // if (!userId) {
-    //   return res.status(401).json({ message: "Authentication required" });
-    // }
-
     const { id: userId, adminId } = req.user;
-    console.log("req.user:", req.user);
+    const creatorId = adminId || userId;
 
-    const creatorId = adminId || userId; // If waiter, use adminId. If admin, use their own ID.
-
-    // Validate the request body
+    // Validation
     if (!tokenNumber) {
       return res.status(400).json({ message: "Token number is required" });
     }
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "Items must be a non-empty array" });
+      return res.status(400).json({ message: "Items must be a non-empty array" });
     }
     if (typeof totalAmount !== "number" || totalAmount <= 0) {
       return res.status(400).json({ message: "Invalid total amount" });
     }
 
-    // Map and prepare items to insert
-    const newItems = items.map((item) => {
+    const newItems = [];
+
+    for (const item of items) {
       if (
+        !item.itemId ||
         !item.itemName ||
         !item.itemPrice ||
         !item.itemQuantity ||
         typeof item.itemPrice !== "number" ||
         typeof item.itemQuantity !== "number"
       ) {
-        throw new Error(
-          "Each item must have valid itemName, itemPrice, and itemQuantity"
-        );
+        throw new Error("Each item must have valid itemId, itemName, itemPrice, and itemQuantity");
       }
 
-      return {
-        createdBy: creatorId, // Associate the item with the authenticated user
-        tokenNumber, // Token number from the request body
+      // 🔎 Find Menu Item in DB
+      const menuItem = await MenuItem.findById(item.itemId);
+      if (!menuItem) {
+        throw new Error(`Menu Item not found: ${item.itemName}`);
+      }
+
+      // ✅ Check stock
+      if (menuItem.qty < item.itemQuantity) {
+        throw new Error(`Not enough stock for ${item.itemName}. Available: ${menuItem.qty}`);
+      }
+
+      // ➖ Subtract stock
+      menuItem.qty -= item.itemQuantity;
+      await menuItem.save();
+
+      // Push prepared item for KOT entry
+      newItems.push({
+        createdBy: creatorId,
+        tokenNumber,
         itemName: item.itemName,
         itemPrice: item.itemPrice,
         itemQuantity: item.itemQuantity,
         itemDescription: item.itemDescription || "",
         itemCategory: item.itemCategory || null,
         tableNumber: item.tableNumber || null,
-        totalAmount, // Total amount passed in request
-        orderStatus: item.orderStatus || "pending", // Default to "pending" if not provided
-      };
-    });
+        totalAmount,
+        orderStatus: item.orderStatus || "pending",
+      });
+    }
 
-    // Insert new items into the database
+    // Save the KOT
     const result = await Kot.insertMany(newItems);
 
     res.status(201).json({ message: "Items created successfully", result });
@@ -66,6 +72,73 @@ const create = async (req, res) => {
     res.status(500).json({ errorMessage: error.message });
   }
 };
+
+
+// const create = async (req, res) => {
+//   try {
+//     const { tokenNumber, items, totalAmount } = req.body;
+
+//     // Ensure the user is authenticated
+//     // const userId = req.user?.id;
+//     // if (!userId) {
+//     //   return res.status(401).json({ message: "Authentication required" });
+//     // }
+
+//     const { id: userId, adminId } = req.user;
+//     console.log("req.user:", req.user);
+
+//     const creatorId = adminId || userId; // If waiter, use adminId. If admin, use their own ID.
+
+//     // Validate the request body
+//     if (!tokenNumber) {
+//       return res.status(400).json({ message: "Token number is required" });
+//     }
+//     if (!items || !Array.isArray(items) || items.length === 0) {
+//       return res
+//         .status(400)
+//         .json({ message: "Items must be a non-empty array" });
+//     }
+//     if (typeof totalAmount !== "number" || totalAmount <= 0) {
+//       return res.status(400).json({ message: "Invalid total amount" });
+//     }
+
+//     // Map and prepare items to insert
+//     const newItems = items.map((item) => {
+//       if (
+//         !item.itemName ||
+//         !item.itemPrice ||
+//         !item.itemQuantity ||
+//         typeof item.itemPrice !== "number" ||
+//         typeof item.itemQuantity !== "number"
+//       ) {
+//         throw new Error(
+//           "Each item must have valid itemName, itemPrice, and itemQuantity"
+//         );
+//       }
+
+//       return {
+//         createdBy: creatorId, // Associate the item with the authenticated user
+//         tokenNumber, // Token number from the request body
+//         itemName: item.itemName,
+//         itemPrice: item.itemPrice,
+//         itemQuantity: item.itemQuantity,
+//         itemDescription: item.itemDescription || "",
+//         itemCategory: item.itemCategory || null,
+//         tableNumber: item.tableNumber || null,
+//         totalAmount, // Total amount passed in request
+//         orderStatus: item.orderStatus || "pending", // Default to "pending" if not provided
+//       };
+//     });
+
+//     // Insert new items into the database
+//     const result = await Kot.insertMany(newItems);
+
+//     res.status(201).json({ message: "Items created successfully", result });
+//   } catch (error) {
+//     console.error("Error creating items:", error);
+//     res.status(500).json({ errorMessage: error.message });
+//   }
+// };
 
 const getKot = async (req, res) => {
   try {
