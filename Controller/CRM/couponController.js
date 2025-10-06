@@ -27,6 +27,19 @@ const getCoupons = async (_req, res) => {
   }
 };
 
+// Get coupon by code
+const getCouponByCode = async (req, res) => {
+  try {
+    const code = String(req.params.code || '').trim().toUpperCase();
+    if (!code) return res.status(400).json({ success: false, message: 'Code is required' });
+    const coupon = await Coupon.findOne({ code });
+    if (!coupon) return res.status(404).json({ success: false, message: 'Coupon not found' });
+    return res.json({ success: true, data: coupon });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // Get a single coupon by id
 const getCouponById = async (req, res) => {
   try {
@@ -68,6 +81,7 @@ const deleteCoupon = async (req, res) => {
 module.exports = {
   createCoupon,
   getCoupons,
+  getCouponByCode,
   getCouponById,
   updateCoupon,
   deleteCoupon,
