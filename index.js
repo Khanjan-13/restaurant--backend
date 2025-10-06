@@ -14,6 +14,7 @@ const ordersRoute = require("./Routes/Dashboard/orderRoute.js");
 const staff = require("./Routes/Dashboard/staff/staffRoute.js");
 const orderStats = require("./Routes/Dashboard/dashBoardRoute.js");
 const customer = require("./Routes/CRM/customerRoutes.js");
+const coupons = require("./Routes/CRM/couponRoutes.js");
 const app = express();
 app.use(bodyParser.json());
 app.use(cors());
@@ -35,4 +36,5 @@ mongoose
 app.use("/dashboard", categoryRoutes, itemRoutes, tableSection, ordersRoute, orderStats);
 app.use("/dashboard/staff", staff);
 app.use("/api/customers", customer);
+app.use("/api/coupons", coupons);
 app.use("/", signupRoutes, kotRoutes, addTable, orderStatusRoutes);
