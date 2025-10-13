@@ -12,8 +12,8 @@ const customerSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["active", "inactive", "vip", "banned"],
-      default: "active",
+      enum: ["friend", "family", "vip"],
+      default: "friend",
     },
 
     lastInteraction: { type: Date }, // last visit / order date
