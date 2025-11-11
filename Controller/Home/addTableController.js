@@ -235,7 +235,7 @@ const regenerateQRCode = async (req, res) => {
 
     // Generate new QR code data with new token - Point to welcome page
     const token = crypto.randomBytes(16).toString("hex");
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const baseUrl = "https://beta--tableno21.netlify.app/" || "http://localhost:5173";
     const qrCodeData = `${baseUrl}/customer/welcome/${table._id}?token=${token}`;
 
     // Update table
