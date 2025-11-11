@@ -36,7 +36,7 @@ const addTableinDB = async (req, res) => {
 
     // Generate QR code data with table ID - Point to welcome page
     const token = crypto.randomBytes(16).toString("hex");
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const baseUrl = "https://beta--tableno21.netlify.app/";
     const qrCodeData = `${baseUrl}/customer/welcome/${savedTable._id}?token=${token}`;
 
     // Update table with QR code data
