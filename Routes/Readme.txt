@@ -1,0 +1,1 @@
+It tells about the endpoints of the application and also map them to specific controller method

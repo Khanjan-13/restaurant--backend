@@ -1,0 +1,1 @@
+Model Tell about structure of data and connection with database.
