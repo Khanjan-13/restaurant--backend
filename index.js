@@ -13,6 +13,7 @@ const addTable = require("./Routes/Home/addTableRoutes.js");
 const ordersRoute = require("./Routes/Dashboard/orderRoute.js");
 const staff = require("./Routes/Dashboard/staff/staffRoute.js");
 const orderStats = require("./Routes/Dashboard/dashBoardRoute.js");
+const inventoryRoute = require("./Routes/Dashboard/inventoryRoute.js");
 const customer = require("./Routes/CRM/customerRoutes.js");
 const coupons = require("./Routes/CRM/couponRoutes.js");
 const customerOrderRoutes = require("./Routes/Customer/customerOrderRoutes.js");
@@ -35,7 +36,7 @@ mongoose
   })
   .catch((error) => console.log("DB connection Error: ", error));
 
-app.use("/dashboard", categoryRoutes, itemRoutes, tableSection, ordersRoute, orderStats);
+app.use("/dashboard", categoryRoutes, itemRoutes, tableSection, ordersRoute, orderStats, inventoryRoute);
 app.use("/dashboard/staff", staff);
 app.use("/api/customers", customer);
 app.use("/api/coupons", coupons);
