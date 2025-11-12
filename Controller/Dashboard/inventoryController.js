@@ -31,7 +31,10 @@ const getInventoryAnalysis = async (req, res) => {
 
     // Top consumed items — aggregate from Orders for last 90 days
     const topConsumedAgg = await Orders.aggregate([
-      { $match: { createdAt: { $gte: new Date(Date.now() - 1000 * 60 * 60 * 24 * 90) } } },
+      { $match: { 
+        createdBy: creatorId,
+        createdAt: { $gte: new Date(Date.now() - 1000 * 60 * 60 * 24 * 90) } 
+      } },
       { $unwind: '$items' },
       { $group: { _id: '$items.itemName', consumed: { $sum: '$items.itemQuantity' }, category: { $first: '$items.itemCategory' } } },
       { $sort: { consumed: -1 } },
@@ -43,7 +46,10 @@ const getInventoryAnalysis = async (req, res) => {
     // Compute 30-day consumption per item to estimate days left
     const thirtyDaysAgo = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
     const consumption30 = await Orders.aggregate([
-      { $match: { createdAt: { $gte: thirtyDaysAgo } } },
+      { $match: { 
+        createdBy: creatorId,
+        createdAt: { $gte: thirtyDaysAgo } 
+      } },
       { $unwind: '$items' },
       { $group: { _id: '$items.itemName', consumed30: { $sum: '$items.itemQuantity' } } }
     ]);
@@ -76,20 +82,64 @@ const getInventoryAnalysis = async (req, res) => {
     const months = getLastNMonths(6);
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+    
     const trendsAgg = await Orders.aggregate([
-      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      { $match: { 
+        createdBy: creatorId,
+        createdAt: { $gte: sixMonthsAgo } 
+      } },
       { $unwind: '$items' },
-      { $group: { _id: { month: { $month: '$createdAt' }, year: { $year: '$createdAt' } }, totalItems: { $sum: '$items.itemQuantity' }, lowStock: { $sum: 0 }, outOfStock: { $sum: 0 } } },
+      { $group: { 
+        _id: { month: { $month: '$createdAt' }, year: { $year: '$createdAt' } }, 
+        totalItems: { $sum: '$items.itemQuantity' }
+      } },
       { $sort: { '_id.year': 1, '_id.month': 1 } }
     ]);
+    
+    // Calculate low stock and out of stock for each month
+    // Get month number from month name
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const stockTrends = months.map(m => {
-      const found = trendsAgg.find(t => t._id.month === new Date(`${m.month} 1, ${m.year}`).getMonth()+1 && t._id.year === m.year);
-      return { month: m.month, totalItems: found ? found.totalItems : 0, lowStock: 0, outOfStock: 0 };
+      const monthIndex = monthNames.indexOf(m.month);
+      const found = trendsAgg.find(t => {
+        // MongoDB returns month as 1-12, so subtract 1 to match JavaScript's 0-11
+        return t._id.month - 1 === monthIndex && t._id.year === m.year;
+      });
+      
+      // Count low stock and out of stock items (current state, not historical)
+      const lowStockCount = items.filter(i => (typeof i.qty === 'number' ? i.qty <= 10 && i.qty > 0 : false)).length;
+      const outOfStockCount = items.filter(i => (typeof i.qty === 'number' ? i.qty === 0 : false)).length;
+      
+      return { 
+        month: m.month, 
+        totalItems: found ? found.totalItems : 0, 
+        lowStock: lowStockCount, 
+        outOfStock: outOfStockCount 
+      };
     });
 
-    // Recent activities — recent orders
-    const recentOrders = await Orders.find({}).sort({ createdAt: -1 }).limit(10).lean();
-    const recentActivities = recentOrders.map(o => ({ action: 'Order Placed', item: o.items?.[0]?.itemName || '—', quantity: o.items?.[0]?.itemQuantity || 0, date: o.createdAt, user: o.createdBy || 'Customer' }));
+    // Recent activities — recent orders filtered by creator
+    const recentOrders = await Orders.find({ createdBy: creatorId })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+    const recentActivities = recentOrders.map(o => ({ 
+      action: 'Order Placed', 
+      item: o.items?.[0]?.itemName || '—', 
+      quantity: o.items?.[0]?.itemQuantity || 0, 
+      date: o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0], 
+      user: o.createdBy || 'Customer' 
+    }));
+
+    // Calculate summary statistics
+    const totalItems = items.length;
+    const totalQuantity = items.reduce((sum, item) => sum + (item.qty || 0), 0);
+    const lowStockCount = items.filter(i => (typeof i.qty === 'number' ? i.qty <= 10 && i.qty > 0 : false)).length;
+    const criticalStockCount = items.filter(i => (typeof i.qty === 'number' ? i.qty <= 1 : false)).length;
+    const totalValue = items.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 0)), 0);
+    const categoryCount = new Set(items.map(i => i.categoryId?.categoryName || 'Uncategorized')).size;
 
     return res.status(200).json({
       stockTrends,
@@ -98,6 +148,14 @@ const getInventoryAnalysis = async (req, res) => {
       lowStockAlerts,
       valueAnalysis,
       recentActivities,
+      summary: {
+        totalItems,
+        totalQuantity,
+        lowStockCount,
+        criticalStockCount,
+        totalValue: Math.round(totalValue),
+        categoryCount,
+      },
     });
   } catch (error) {
     console.error('Inventory analysis error:', error);
