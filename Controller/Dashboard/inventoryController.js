@@ -1,6 +1,6 @@
-const MenuItem = require("../../../Model/Dashboard/menuItemModel.js");
-const Orders = require("../../../Model/Dashboard/ordersModel.js");
-const Category = require("../../../Model/Dashboard/menuCategoryModel.js");
+const MenuItem = require("../../Model/Dashboard/menuItemModel.js");
+const Orders = require("../../Model/Dashboard/ordersModel.js");
+const Category = require("../../Model/Dashboard/menuCategoryModel.js");
 
 // Helper to get last N months labels
 const getLastNMonths = (n) => {

@@ -1,4 +1,4 @@
-const Staff = require("../../../Model/Dashboard/staff/staffModel.js");
+const Staff = require("../../Model/Dashboard/staff/staffModel.js");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
